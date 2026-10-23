@@ -25,24 +25,24 @@ export function render(input, nowSeconds) {
 function warmLine(cache, left) {
   const ttl = TTL_SECONDS[cache.ttl]
   const color = ttl && left < ttl * WARN_SHARE ? YELLOW : GREEN
-  let head = 'cache ●'
+  let head = '快取 ●'
   if (ttl) head += ` ${cache.ttl} ${bar(left / ttl)}`
-  head += ` ${duration(left)} left`
+  head += ` 剩 ${duration(left)}`
 
   const rest = []
-  if (typeof cache.hit_ratio === 'number') rest.push(`hit ${Math.round(cache.hit_ratio * 100)}%`)
-  if (typeof cache.misses === 'number') rest.push(`misses ${cache.misses}`)
+  if (typeof cache.hit_ratio === 'number') rest.push(`命中 ${Math.round(cache.hit_ratio * 100)}%`)
+  if (typeof cache.misses === 'number') rest.push(`未命中 ${cache.misses}`)
   return [`${color}${head}${RESET}`, ...rest].join(' · ')
 }
 
 function coldLine(cache) {
   const rest = []
   if (typeof cache.recache_tokens_if_cold === 'number') {
-    rest.push(`next message re-caches ${tokens(cache.recache_tokens_if_cold)} tokens`)
+    rest.push(`下一句會重新快取 ${tokens(cache.recache_tokens_if_cold)} tokens`)
   }
   const cause = missCause(cache.last_miss_cause)
   if (cause) rest.push(cause)
-  return [`${RED}cache ○ cold${RESET}`, ...rest].join(' · ')
+  return [`${RED}快取 ○ 已冷${RESET}`, ...rest].join(' · ')
 }
 
 function bar(share) {
@@ -52,7 +52,7 @@ function bar(share) {
 
 // 38m, 53s: whole minutes from a minute up.
 function duration(seconds) {
-  return seconds >= 60 ? `${Math.floor(seconds / 60)}m` : `${Math.max(1, Math.floor(seconds))}s`
+  return seconds >= 60 ? `${Math.floor(seconds / 60)} 分` : `${Math.max(1, Math.floor(seconds))} 秒`
 }
 
 // 82k from 82,400; under a thousand as it is.
@@ -60,8 +60,17 @@ function tokens(count) {
   return count >= 1000 ? `${Math.round(count / 1000)}k` : String(count)
 }
 
-// `tools_changed` reads "tools changed"; null when the last miss has no known cause.
+// zh-TW names for the causes I know of; any other reads as its key with spaces (`tools_changed` -> "tools changed").
+const CAUSES_ZH = {
+  tools_changed: '工具有變更',
+  system_changed: '系統提示有變更',
+  model_changed: '模型有變更',
+  ttl_expired: '快取逾時',
+  thinking_changed: '思考設定有變更',
+}
+
+// null when the last miss has no known cause.
 function missCause(cause) {
   const names = Array.isArray(cause?.causes) ? cause.causes.filter(c => typeof c === 'string' && c) : []
-  return names.length ? names.map(n => n.replaceAll('_', ' ')).join(', ') : null
+  return names.length ? names.map(n => CAUSES_ZH[n] ?? n.replaceAll('_', ' ')).join('、') : null
 }

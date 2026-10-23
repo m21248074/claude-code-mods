@@ -9,7 +9,11 @@ const CELLS = 5
 const BLOCKS = '▁▂▃▄▅▆▇█'
 const TICK_MS = 60_000
 const WARN_AT = 90
-const LABELS: Record<string, string> = { five_hour: '5h', seven_day: '7d', spend_limit: 'spend' }
+// zh-TW labels; the keys are the window kinds the engine reports.
+const LABELS: Record<string, string> = { five_hour: '5 小時', seven_day: '7 天', spend_limit: '花費上限' }
+
+// Terminal cells a text takes: CJK characters are two wide.
+const cells = (text: string) => [...text].reduce((n, ch) => n + ((ch.codePointAt(0) ?? 0) > 0x2e7f ? 2 : 1), 0)
 const ORDER = ['five_hour', 'seven_day', 'spend_limit']
 
 // Held by the host, so they survive a hot reload of this file.
@@ -112,9 +116,9 @@ async function warn($: EngineInterface, windows: UsageMeterWindow[]) {
     // A reset time that moved on by more than half an hour is a new period.
     if (last !== undefined && resetMs <= last + 30 * 60_000) continue
     fresh[w.kind] = resetMs
-    const when = resetMs > 0 ? `, resets in ${countdown(resetMs - now)}` : ''
-    const what = w.kind === 'spend_limit' ? 'Spend limit' : `${label(w.kind)} usage limit`
-    $.ui.toast(`${what} at ${Math.round(w.percentUsed)}%${when}`)
+    const when = resetMs > 0 ? `,${countdown(resetMs - now)}後重置` : ''
+    const what = w.kind === 'spend_limit' ? '花費上限' : `${label(w.kind)}額度`
+    $.ui.toast(`${what}已用 ${Math.round(w.percentUsed)}%${when}`)
   }
   if (Object.keys(fresh).length > 0 || rearm.length > 0) {
     await update($, warned, old => {
@@ -139,12 +143,12 @@ export function build(snap: UsageMeterSnapshot, now: number): Part[] {
     const resetMs = resetTime(w)
     // The first window always says when it resets; the others only once they run high.
     if (resetMs > 0 && (i === 0 || w.percentUsed >= 75)) {
-      segments.push({ text: ` · resets ${countdown(resetMs - now)}`, dim: true })
+      segments.push({ text: ` · ${countdown(resetMs - now)}後重置`, dim: true })
     }
     return { kind: 'window', isPrimary: i === 0, segments }
   })
   if (snap.costUsd !== undefined && snap.costUsd > 0) {
-    parts.push({ kind: 'cost', isPrimary: false, segments: [{ text: `$${snap.costUsd.toFixed(2)} session`, dim: true }] })
+    parts.push({ kind: 'cost', isPrimary: false, segments: [{ text: `本次 $${snap.costUsd.toFixed(2)}`, dim: true }] })
   }
   return parts
 }
@@ -164,7 +168,7 @@ export function fit(parts: Part[], columns: number): Part[] {
 
 function width(parts: Part[]) {
   const text = parts.map(p => p.segments.map(s => s.text).join('')).join(' · ')
-  return 3 + [...text].length // the clock and its space: the glyph can draw two cells wide
+  return 3 + cells(text) // the clock and its space: the glyph can draw two cells wide
 }
 
 function findLastIndex<T>(list: T[], test: (item: T) => boolean) {
@@ -190,11 +194,11 @@ export function colorFor(percent: number) {
 
 export function countdown(ms: number) {
   const minutes = Math.max(0, Math.ceil(ms / 60_000))
-  if (minutes < 1) return 'now'
-  if (minutes < 60) return `${minutes}m`
+  if (minutes < 1) return '即將'
+  if (minutes < 60) return `${minutes}分`
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h${String(minutes % 60).padStart(2, '0')}`
-  return `${Math.floor(hours / 24)}d${hours % 24}h`
+  if (hours < 24) return `${hours}時${String(minutes % 60).padStart(2, '0')}分`
+  return `${Math.floor(hours / 24)}天${hours % 24}時`
 }
 
 function resetTime(w: UsageMeterWindow) {

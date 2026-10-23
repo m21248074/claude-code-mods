@@ -25,7 +25,7 @@ export const register: Register = on => {
     const r = await next(e)
     await $.command.register({
       name: 'cache-clock',
-      description: 'Add a prompt-cache line under the status line; /cache-clock remove takes it out',
+      description: '在狀態列下方加上一行提示快取資訊;/cache-clock remove 可移除',
       argumentHint: '[setup|remove]',
     }).catch(() => {}) // a name Claude Code already has is refused: start anyway
     void refreshScripts($).catch(() => {})
@@ -38,7 +38,7 @@ export const register: Register = on => {
       if (word === 'setup') return { text: await setup($) }
       if (word === 'remove') return { text: await remove($) }
       if (word === '') return { text: await status($) }
-      return { text: 'Usage: /cache-clock [setup|remove]' }
+      return { text: '用法:/cache-clock [setup|remove]' }
     } catch (err) {
       return { text: `cache-clock: ${err instanceof Error ? err.message : String(err)}` }
     }
@@ -49,12 +49,12 @@ async function setup($: EngineInterface) {
   const dir = await clockDir($)
   const found = await inForce($)
   if (found.source === 'policy' || found.source === 'flag') {
-    const where = found.source === 'policy' ? 'managed settings' : '--settings'
-    return `Your status line comes from ${where}, which cache-clock can't change. Nothing changed.`
+    const where = found.source === 'policy' ? '受管理的設定' : '--settings'
+    return `你的狀態列來自${where},cache-clock 無法修改。沒有做任何變更。`
   }
   if (isOurs(found.statusLine)) {
     await copyScripts($, dir)
-    return 'cache-clock is already set up. Its scripts are up to date.'
+    return 'cache-clock 已經設定好了,腳本是最新的。'
   }
 
   const file = await targetFile($, found.source)
@@ -78,9 +78,9 @@ async function setup($: EngineInterface) {
 
   const lines = [
     wrapped
-      ? `cache-clock set up in ${file}. Your status line stays as it is, with the cache line under it.`
-      : `cache-clock set up in ${file}. The cache line is your status line.`,
-    'It shows up after Claude\'s next reply. /cache-clock remove puts things back.',
+      ? `cache-clock 已設定在 ${file}。你原本的狀態列維持不變,快取那一行會顯示在它下面。`
+      : `cache-clock 已設定在 ${file}。快取那一行就是你的狀態列。`,
+    'Claude 下一次回覆後就會出現。輸入 /cache-clock remove 可還原。',
     ...(await warnings($)),
   ]
   return lines.join('\n')
@@ -93,28 +93,28 @@ async function remove($: EngineInterface) {
   const file = await targetFile($, isOurs(found.statusLine) ? found.source : 'user')
   const key = keyFor(file)
   const saved = await readSaved($, `${dir}/setup-${key}.json`)
-  if (!saved) return 'cache-clock is not set up here. Nothing changed.'
+  if (!saved) return 'cache-clock 在這裡沒有設定,沒有做任何變更。'
 
   const settings = await readJson($, saved.file)
   if (!isOurs(asStatusLine(settings.statusLine))) {
     await $.fs.write(`${dir}/setup-${key}.json`, '{}\n')
-    return `The status line in ${saved.file} was changed since setup, so it was left as it is.`
+    return `${saved.file} 裡的狀態列在設定後被改過,所以維持原樣。`
   }
   if (saved.previous) settings.statusLine = saved.previous
   else delete settings.statusLine
   await $.fs.write(saved.file, JSON.stringify(settings, null, 2) + '\n')
   await $.fs.write(`${dir}/setup-${key}.json`, '{}\n')
   return saved.previous
-    ? `cache-clock removed. Your status line in ${saved.file} is back as it was.`
-    : `cache-clock removed from ${saved.file}.`
+    ? `cache-clock 已移除。${saved.file} 裡你原本的狀態列已還原。`
+    : `cache-clock 已從 ${saved.file} 移除。`
 }
 
 async function status($: EngineInterface) {
   const found = await inForce($)
   if (isOurs(found.statusLine)) {
-    return ['cache-clock is on. /cache-clock remove takes it out.', ...(await warnings($))].join('\n')
+    return ['cache-clock 已開啟。輸入 /cache-clock remove 可移除。', ...(await warnings($))].join('\n')
   }
-  return 'cache-clock is off. /cache-clock setup adds the cache line under your status line.'
+  return 'cache-clock 未開啟。輸入 /cache-clock setup 可把快取那一行加到你的狀態列下方。'
 }
 
 // After an update of the mod, the copies setup made catch up with the new scripts.
@@ -137,10 +137,10 @@ async function copyScripts($: EngineInterface, dir: string) {
 async function warnings($: EngineInterface) {
   const out: string[] = []
   const node = await $.process.run(['node', '--version'], { timeoutMs: 5000 }).catch(() => null)
-  if (!node || node.exitCode !== 0) out.push('Warning: node is not on your PATH. The cache line needs Node to run.')
+  if (!node || node.exitCode !== 0) out.push('警告:PATH 裡找不到 node,快取那一行需要 Node 才能執行。')
   const { base, version } = await $.session.version()
   if (isOlder(base ?? version, MIN_VERSION)) {
-    out.push(`Warning: Claude Code ${version} is older than 2.1.251, so it sends no cache data. The line stays empty until you update.`)
+    out.push(`警告:Claude Code ${version} 比 2.1.251 舊,不會傳送快取資料,更新之前這一行會是空的。`)
   }
   return out
 }
@@ -167,7 +167,7 @@ async function configDir($: EngineInterface) {
   const custom = await $.env.get('CLAUDE_CONFIG_DIR')
   if (custom) return custom.replace(/\/+$/, '')
   const home = await $.env.get('HOME')
-  if (!home) throw new Error('HOME is not set, so the Claude config folder is unknown.')
+  if (!home) throw new Error('未設定 HOME,所以不知道 Claude 設定資料夾在哪裡。')
   return `${home}/.claude`
 }
 
@@ -183,9 +183,9 @@ async function readJson($: EngineInterface, file: string): Promise<Record<string
   try {
     parsed = JSON.parse(text)
   } catch {
-    throw new Error(`${file} is not valid JSON, so it was left as it is.`)
+    throw new Error(`${file} 不是有效的 JSON,所以維持原樣。`)
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`${file} does not hold a settings object.`)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`${file} 裡沒有設定物件。`)
   return parsed as Record<string, unknown>
 }
 

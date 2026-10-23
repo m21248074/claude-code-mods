@@ -24,10 +24,27 @@ const isHidden = atom({ plugin: 'context-bar', key: 'isHidden' } as const, false
 
 let bandOrder: Promise<string[]> | undefined // read once per session: restart to apply
 
+// zh-TW: display names for /context's categories; the keys are what the engine reports, lower-cased.
+const NAME_ZH: Record<string, string> = {
+  'system prompt': '系統提示',
+  'system tools': '系統工具',
+  'mcp tools': 'MCP 工具',
+  'mcp server instructions': 'MCP 伺服器指示',
+  'memory files': '記憶檔',
+  skills: '技能',
+  'custom agents': '自訂 agent',
+  messages: '訊息',
+  'free space': '剩餘空間',
+  'autocompact buffer': '自動壓縮緩衝',
+}
+const shown = (name: string) => NAME_ZH[name] ?? name
+// Terminal cells a text takes: CJK characters are two wide.
+const wlen = (text: string) => [...text].reduce((n, ch) => n + ((ch.codePointAt(0) ?? 0) > 0x2e7f ? 2 : 1), 0)
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const r = await next(e)
-    await $.command.register({ name: 'context-bar', description: 'Show or hide the context window bar above the prompt' }).catch(() => {}) // a name Claude Code already has is refused: start anyway
+    await $.command.register({ name: 'context-bar', description: '顯示或隱藏輸入框上方的上下文視窗長條' }).catch(() => {}) // a name Claude Code already has is refused: start anyway
     const hidden = (await $.store.get('isHidden').catch(() => undefined)) === true
     await update($, isHidden, () => hidden)
     void refresh($).catch(() => {})
@@ -50,7 +67,7 @@ export const register: Register = on => {
     const hidden = await update($, isHidden, h => !h)
     await $.store.set('isHidden', hidden).catch(() => {})
     if (!hidden) await refresh($).catch(() => {})
-    return { text: hidden ? 'Context bar hidden. /context-bar shows it again' : 'Context bar on' }
+    return { text: hidden ? '上下文長條已隱藏。再輸入 /context-bar 可重新顯示' : '上下文長條已開啟' }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -61,7 +78,7 @@ export const register: Register = on => {
     const inner = e.props.bodyColumns - 4 // the border and padding take 4 cells
     if (inner < MIN_WIDTH) return rest
 
-    const head = `${tokens(r.total)} of ${tokens(r.window)}${r.compactsAt ? ` · compacts at ${tokens(r.compactsAt)}` : ''}`
+    const head = `${tokens(r.total)} / ${tokens(r.window)}${r.compactsAt ? ` · 達 ${tokens(r.compactsAt)} 時壓縮` : ''}`
     const pct = ` ${r.percent}% `
     const level = r.compactsAt ? r.total / r.compactsAt : r.total / r.window
     const mine = (
@@ -69,7 +86,7 @@ export const register: Register = on => {
         <Box flexDirection="row" justifyContent="space-between">
           <Text wrap="truncate-end">
             <Text color="#d97757">{'◆ '}</Text>
-            <Text bold>context</Text>
+            <Text bold>上下文</Text>
           </Text>
           <Text wrap="truncate-start">
             <Text dimColor>{`${head} `}</Text>
@@ -87,7 +104,7 @@ export const register: Register = on => {
               <Text>
                 {i > 0 && <Text>{SPLIT}</Text>}
                 <Text color={s.color}>{s.kind === 'used' ? '■ ' : `${GLYPH[s.kind]} `}</Text>
-                <Text dimColor={s.kind !== 'used'}>{`${s.name} `}</Text>
+                <Text dimColor={s.kind !== 'used'}>{`${shown(s.name)} `}</Text>
                 <Text bold={s.kind === 'used'}>{tokens(s.tokens)}</Text>
                 {s.kind === 'used' && <Text dimColor>{` ${share(s.tokens, r.window)}`}</Text>}
               </Text>
@@ -167,7 +184,7 @@ export function legend(r: Reading, width: number) {
   const lines: Slice[][] = [[]]
   let used = 0
   for (const s of r.slices) {
-    const size = 2 + s.name.length + 1 + tokens(s.tokens).length + (s.kind === 'used' ? 1 + share(s.tokens, r.window).length : 0)
+    const size = 2 + wlen(shown(s.name)) + 1 + tokens(s.tokens).length + (s.kind === 'used' ? 1 + share(s.tokens, r.window).length : 0)
     const line = lines.at(-1)!
     if (line.length > 0 && used + SPLIT.length + size > width) {
       lines.push([s])
